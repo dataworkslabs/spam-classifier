@@ -1,0 +1,185 @@
+---
+title: "spamvham"
+author: "Mark Hamer"
+date: "2026-05-01"
+output:
+  pdf_document: default
+  html_document: default
+---
+# Spam Classification with Naive Bayes
+This project uses the SpamAssassin public email dataset to build a spam classifier in R. Emails are classified as spam or ham using a Naive Bayes model trained on word frequencies.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Step 1: Load the Data
+6,050 emails were read from five folders — easy_ham, easy_ham_2, hard_ham, spam, and spam_2. Each email was labeled based on its folder. Files with encoding issues were skipped using tryCatch().
+
+
+```{r}
+
+library(tm)
+
+read_folder <- function(folder_path, label) {
+  files <- list.files(folder_path, full.names = TRUE)
+  emails <- lapply(files, function(f) {
+    tryCatch(readLines(f, encoding = "latin1"), error = function(e) NULL)
+  })
+  # Collapse each email's lines into one string
+  emails <- sapply(emails, paste, collapse = " ")
+  data.frame(text = emails, label = label, stringsAsFactors = FALSE)
+}
+```
+
+```{r}
+all_emails <- rbind(
+  read_folder("/Users/mark/Desktop/Coding/607/Project 4/data/easy_ham",   "ham"),
+  read_folder("/Users/mark/Desktop/Coding/607/Project 4/data/easy_ham_2", "ham"),
+  read_folder("/Users/mark/Desktop/Coding/607/Project 4/data/hard_ham",   "ham"),
+  read_folder("/Users/mark/Desktop/Coding/607/Project 4/data/spam",       "spam"),
+  read_folder("/Users/mark/Desktop/Coding/607/Project 4/data/spam_2",     "spam")
+)
+```
+```{r}
+nrow(all_emails)
+table(all_emails$label)
+```
+
+## Step 2: Clean the Text
+Each email was lowercased, stripped of punctuation, had stopwords removed, and had extra whitespace trimmed using the tm package.
+
+```{r}
+corpus <- VCorpus(VectorSource(all_emails$text))
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeWords, stopwords("en"))
+corpus <- tm_map(corpus, stripWhitespace)
+```
+
+```{r}
+dtm <- DocumentTermMatrix(corpus)
+```
+
+
+```{r}
+dtm <- removeSparseTerms(dtm, 0.99)
+dim(dtm)
+```
+
+## Step 3: Build the Document-Term Matrix
+Emails were converted into a DTM where each row is an email and each column is a word. The initial matrix had 244,704 terms. removeSparseTerms() was used to reduce this to 227 terms by keeping only words that appeared frequently across emails.
+
+```{r}
+labels <- factor(all_emails$label)
+set.seed(42)
+train_index <- sample(1:nrow(dtm), 0.8 * nrow(dtm))
+```
+
+```{r}
+train_dtm <- dtm[train_index, ]
+test_dtm  <- dtm[-train_index, ]
+train_labels <- labels[train_index]
+test_labels  <- labels[-train_index]
+```
+
+```{r}
+spam_idx <- which(train_labels == "spam")
+ham_idx  <- which(train_labels == "ham")
+ham_idx_balanced <- sample(ham_idx, length(spam_idx))
+balanced_idx <- c(spam_idx, ham_idx_balanced)
+train_dtm_bal    <- train_dtm[balanced_idx, ]
+train_labels_bal <- train_labels[balanced_idx]
+```
+
+
+
+```{r}
+train_mat <- as.matrix(train_dtm_bal)
+test_mat  <- as.matrix(test_dtm)
+```
+
+```{r}
+library(e1071)
+model <- naiveBayes(train_mat, train_labels_bal, laplace = 1)
+```
+
+```{r}
+predictions <- predict(model, test_mat)
+library(caret)
+confusionMatrix(predictions, test_labels)
+```
+
+```{r}
+dtm <- removeSparseTerms(dtm, 0.95)
+dim(dtm)
+```
+
+```{r}
+train_dtm <- dtm[train_index, ]
+test_dtm  <- dtm[-train_index, ]
+train_labels_bal <- train_labels[balanced_idx]
+train_dtm_bal    <- train_dtm[balanced_idx, ]
+train_mat <- as.matrix(train_dtm_bal)
+test_mat  <- as.matrix(test_dtm)
+model <- naiveBayes(train_mat, train_labels_bal, laplace = 1)
+predictions <- predict(model, test_mat)
+confusionMatrix(predictions, test_labels)
+```
+
+```{r}
+dtm <- removeSparseTerms(dtm, 0.90)
+dim(dtm)
+```
+
+```{r}
+train_dtm <- dtm[train_index, ]
+test_dtm  <- dtm[-train_index, ]
+train_labels_bal <- train_labels[balanced_idx]
+train_dtm_bal    <- train_dtm[balanced_idx, ]
+train_mat <- as.matrix(train_dtm_bal)
+test_mat  <- as.matrix(test_dtm)
+model <- naiveBayes(train_mat, train_labels_bal, laplace = 1)
+predictions <- predict(model, test_mat)
+confusionMatrix(predictions, test_labels)
+```
+
+```{r}
+dtm <- removeSparseTerms(dtm, 0.85)
+dim(dtm)
+```
+
+```{r}
+train_dtm <- dtm[train_index, ]
+test_dtm  <- dtm[-train_index, ]
+train_labels_bal <- train_labels[balanced_idx]
+train_dtm_bal    <- train_dtm[balanced_idx, ]
+train_mat <- as.matrix(train_dtm_bal)
+test_mat  <- as.matrix(test_dtm)
+model <- naiveBayes(train_mat, train_labels_bal, laplace = 1)
+predictions <- predict(model, test_mat)
+confusionMatrix(predictions, test_labels)
+```
+
+
+```{r}
+new_email <- "bulk precedence free email information microsoft"
+
+new_corpus <- VCorpus(VectorSource(new_email))
+new_corpus <- tm_map(new_corpus, content_transformer(tolower))
+new_corpus <- tm_map(new_corpus, removePunctuation)
+new_corpus <- tm_map(new_corpus, removeWords, stopwords("en"))
+new_corpus <- tm_map(new_corpus, stripWhitespace)
+
+new_dtm <- DocumentTermMatrix(new_corpus, control = list(dictionary = Terms(dtm)))
+new_mat <- as.matrix(new_dtm)
+predict(model, new_mat)
+```
+
+## Step 5: Results
+
+The model achieved 89% accuracy and 89% sensitivity on the test set. Tightening the sparsity threshold consistently improved performance — reducing from 2,616 terms to 227 terms raised accuracy from 62% to 89%.
+
+## Conclusion
+
+Naive Bayes works well for spam classification when given balanced training data and a focused vocabulary. The main limitation of this implementation is that the retained terms are dominated by email header metadata rather than message body content, which limits the model's ability to classify new plain-text emails written outside the SpamAssassin format. Stripping headers before building the DTM would likely improve real-world performance.
